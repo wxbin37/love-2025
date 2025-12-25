@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <script src="js/jquery.min.js"></script>
+    <title>七夕情人表白台 - 粉色爱心3D相册</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.8/jquery.min.js"></script>
+    <link type="text/css" href="style.css" rel="stylesheet" />
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        .container {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .love-text {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff68a4;
+            font-size: 2.5em;
+            font-family: "微软雅黑", sans-serif;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            z-index: 1000;
+            animation: heartbeat 2s ease-in-out infinite;
+        }
+        @keyframes heartbeat {
+            0%, 100% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.1); }
+        }
+        .music-control {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            color: white;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="love-text">♥ 愿与你共度每一个七夕 ♥</div>
+
+<div class="music-control" onclick="toggleMusic()">♪</div>
+
+<audio id="bgmusic" autoplay loop>
+    <source src="https://www.soundjay.com/misc/sounds/bell-ringing-05.wav" type="audio/wav" />
+</audio>
+
+<div id="jsi-cherry-container" class="container">
+    <div class="box">
+        <ul class="minbox">
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+        </ul>
+        <ol class="maxbox">
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+            <li></li>
+        </ol>
+    </div>
+</div>
+</div>
+<script>
+    var RENDERER = {
+        INIT_CHERRY_BLOSSOM_COUNT: 30,
+        MAX_ADDING_INTERVAL: 18,
+
+        init: function() {
+            this.setParameters();
+            this.reconstructMethods();
+            this.createCherries();
+            this.render();
+
+            if (navigator.userAgent.match(/(phone|ipod|iPhone|iPad|ios|android|mobile|BlackBerry|IEMobile|OperaMini|JUC|Fennec|wOSBrowser|BrowserNG|Webos|Symbian|Windows Phone)/i)) {
+                var box = document.querySelectorAll('.box')[0];
+                console.log(box, "移动端");
+                box.style.marginTop = "55%";
+            }
+        },
+
+        setParameters: function() {
+            this.$container = $('#jsi-cherry-container');
+            this.width = this.$container.width();
+            this.height = this.$container.height();
+            this.$canvas = $('<canvas />')
+                .attr({width: this.width, height: this.height})
+                .appendTo(this.$container)
+                .get(0);
+            this.context = this.$canvas.getContext('2d');
+            this.cherries = [];
+            this.maxAddingInterval = Math.round(this.MAX_ADDING_INTERVAL * 1000 / this.width);
+            this.addingInterval = this.maxAddingInterval;
+        },
+
+        reconstructMethods: function() {
+            this.render = this.render.bind(this);
+        },
+
+        createCherries: function() {
+            for (var i = 0, length = Math.round((this.INIT_CHERRY_BLOSSOM_COUNT * this.width) / 1000); i < length; i++) {
+                this.cherries.push(new CHERRY_BLOSSOM(this, true));
+            }
+        },
+
+        render: function() {
+            requestAnimationFrame(this.render);
+            this.context.clearRect(0, 0, this.width, this.height);
+            this.cherries.sort(function(cherry1, cherry2) {
+                return cherry1.z - cherry2.z;
+            });
+
+            for (var i = this.cherries.length - 1; i >= 0; i--) {
+                if (!this.cherries[i].render(this.context)) {
+                    this.cherries.splice(i, 1);
+                }
+            }
+
+            if (--this.addingInterval === 0) {
+                this.addingInterval = this.maxAddingInterval;
+                this.cherries.push(new CHERRY_BLOSSOM(this, false));
+            }
+        }
+    };
+
+    var CHERRY_BLOSSOM = function(renderer, isRandom) {
+        this.renderer = renderer;
+        this.init(isRandom);
+    };
+
+    CHERRY_BLOSSOM.prototype = {
+        FOCUS_POSITION: 3000,
+        FAR_LIMIT: 6000,
+        RIPPLE_RADIUS: 100,
+        RIPPLE_RATE: 0.5,
+        SURFACE_RATE: 0.8,
+        SINK_OFFSET: 20,
+        init: function(isRandom) {
+            this.x = isRandom ? this.getRandomValue(-this.renderer.width, this.renderer.width) : 0;
+            this.y = isRandom ? this.getRandomValue(0, this.renderer.height) : this.renderer.height * 1.5;
+            this.z = this.getRandomValue(0, this.FAR_LIMIT);
+            this.vx = this.getRandomValue(-2, 2);
+            this.vy = -2;
+            this.theta = this.getRandomValue(0, Math.PI * 2);
+            this.phi = this.getRandomValue(0, Math.PI * 2);
+            this.dsi = 0;
+            this.dphi = this.getRandomValue(Math.PI / 600, Math.PI / 300);
+            this.opacity = 0;
+            this.endPhi = false;
+            this.endDphi = false;
+            this.rippleCount = 0;
+
+            var axis = this.getAxis(),
+                theta = this.theta + (Math.ceil((this.y + this.renderer.height * this.SURFACE_RATE) / this.vy) * Math.PI) / 500;
+            theta %= Math.PI * 2;
+            this.se = Math.floor(40 * (theta < Math.PI / 2 || theta > (Math.PI * 3) / 2 ? -1 : 1)) * axis.rate;
+            this.threshold = this.renderer.height / 2 + this.renderer.height * this.SURFACE_RATE * axis.rate;
+            this.entityColor = this.renderer.context.createRadialGradient(0, 40, 0, 40, 40, 80);
+            this.entityColor.addColorStop(0, 'hsl(330, 70%, ' + 50 * (0.3 + axis.rate) + '%)');
+            this.entityColor.addColorStop(0.45, 'hsl(330, 40%, ' + 55 * (0.3 + axis.rate) + '%)');
+            this.entityColor.addColorStop(1, 'hsl(330, 20%, ' + 70 * (0.3 + axis.rate) + '%)');
+            this.shadowColor = this.renderer.context.createRadialGradient(0, 40, 0, 40, 40, 80);
+            this.shadowColor.addColorStop(0, 'hsl(330, 40%, ' + 38 * (0.3 + axis.rate) + '%)');
+            this.shadowColor.addColorStop(0.45, 'hsl(330, 30%, ' + 30 * (0.3 + axis.rate) + '%)');
+            this.shadowColor.addColorStop(1, 'hsl(330, 20%, ' + 48 * (0.3 + axis.rate) + '%)');
+        },
+
+        getRandomValue: function(min, max) {
+            return min + (max - min) * Math.random();
+        },
+
+        getAxis: function() {
+            var rate = this.FOCUS_POSITION / (this.z + this.FOCUS_POSITION),
+                x = this.renderer.width / 2 - this.x * rate,
+                y = this.renderer.height / 2 - this.y * rate;
+            return {rate: rate, x: x, y: y};
+        },
+
+        renderCherry: function(context, axis) {
+            context.beginPath();
+            context.moveTo(0, 40);
+            context.bezierCurveTo(60, 60, 20, -10, 60, 0, 20);
+            context.bezierCurveTo(-10, 60, 60, 20, 0, 40);
+            context.fill();
+
+            for (var i = -4; i < 4; i++) {
+                context.beginPath();
+                context.moveTo(0, 40);
+                context.quadraticCurveTo(i * 12, 18, i * 4, -24 + Math.abs(i) * 2);
+                context.stroke();
+            }
+        },
+
+        render: function(context) {
+            var axis = this.getAxis();
+
+            if (axis.y == this.threshold && this.rippleCount < this.MAX_RIPPLE_COUNT) {
+                context.save();
+                context.lineWidth = 2;
+                context.strokeStyle = 'hsla(0, 0%, 100%, ' + (this.MAX_RIPPLE_COUNT - this.rippleCount) / this.MAX_RIPPLE_COUNT + ')';
+                context.translate(axis.x + this.se + this.offsetX * axis.rate * (this.theta < Math.PI * 2 - 1), axis.y);
+                context.scale(1, 0.3);
+                context.beginPath();
+                context.arc(0, 0, (this.rippleCount / this.MAX_RIPPLE_COUNT) * this.RIPPLE_RADIUS * axis.rate, 0, Math.PI * 2, false);
+                context.stroke();
+                context.restore();
+                this.rippleCount++;
+            }
+            if (axis.y < this.threshold || this.endTheta || this.endPhi) {
+                if (this.opacity < 1) {
+                    this.opacity = Math.min(this.opacity + 0.01, 1);
+                }
+                context.save();
+                context.globalAlpha = this.opacity;
+                context.fillStyle = this.shadowColor;
+                context.strokeStyle = 'hsl(330, 38%, ' + 48 * (0.3 + axis.rate) + '%)';
+                context.translate(axis.x, axis.y + (this.threshold + this.threshold - axis.y));
+                context.rotate(Math.PI - this.theta);
+                context.scale(axis.rate * Math.sin(this.phi), axis.rate);
+                context.translate(0, this.offsetY);
+                this.renderCherry(context, axis);
+                context.restore();
+            }
+
+            context.save();
+            context.fillStyle = this.entityColor;
+            context.strokeStyle = 'hsl(330, 40%, ' + 70 * (0.3 + axis.rate) + '%)';
+            context.translate(axis.x, axis.y + Math.abs(this.SINK_OFFSET * Math.sin(this.psi)) * axis.rate);
+            context.rotate(this.theta);
+            context.scale(axis.rate * Math.sin(this.phi), axis.rate);
+            context.translate(0, this.offsetY);
+            this.renderCherry(context, axis);
+            context.restore();
+
+            if (this.y < -this.renderer.height / 4) {
+                if (!this.endTheta) {
+                    for (var theta = Math.PI / 2, end = (Math.PI * 3) / 2; theta <= end; theta += Math.PI) {
+                        if (this.theta < theta && this.theta + Math.PI / 200 > theta) {
+                            this.theta = theta;
+                            this.endTheta = true;
+                            break;
+                        }
+                    }
+                }
+                if (!this.endPhi) {
+                    for (var phi = Math.PI / 8, end = (Math.PI * 7) / 8; phi <= end; phi += (Math.PI * 3) / 4) {
+                        if (this.phi < phi && this.phi + Math.PI / 200 > phi) {
+                            this.phi = phi + Math.PI / 8;
+                            this.endPhi = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            this.x += this.vx;
+            this.y += this.vy;
+            this.z += this.vz || 0;
+            this.theta += this.endTheta ? 0 : Math.PI / 500;
+            this.phi += this.endPhi ? 0 : Math.PI / 500;
+            this.psi += this.dsi;
+
+            return (this.z > -this.FOCUS_POSITION && this.z < this.FAR_LIMIT && this.x < this.renderer.width * 1.5);
+        }
+    };
+
+    function toggleMusic() {
+        var music = document.getElementById("bgmusic");
+        if (music.paused) {
+            music.play();
+        } else {
+            music.pause();
+        }
+    }
+
+    $(function() {
+        RENDERER.init();
+    });
+</script>
+</body>
+</html>
+

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+ 
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>透明背景烟花</title>
+</head>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    /* 模拟被嵌入页面的背景，演示透明效果，实际使用时去掉下面这行 */
+    background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364); 
+  }
+ 
+  .canvasBox {
+    width: 100%;
+    height: 100%;
+    position: fixed; /* 改为 fixed 方便覆盖在其他页面之上 */
+    top: 0;
+    left: 0;
+    z-index: 9999; /* 确保层级在最上 */
+    pointer-events: none; /* 关键：让鼠标点击穿透 canvas，不影响底部页面操作 */
+  }
+ 
+  canvas {
+    /* 去掉边框和背景色 */
+    background-color: transparent; 
+  }
+</style>
+ 
+<body>
+  <div style="position: absolute; top: 40%; left: 10%; color: white; font-family: sans-serif; z-index: 1;">
+      <h1>这是你的主页内容</h1>
+      <p>烟花将在这一层之上播放，且背景透明。</p>
+      <button onclick="alert('点击穿透成功！')">测试点击按钮</button>
+  </div>
+
+<div class="canvasBox">
+  <canvas id="canvas"></canvas>
+</div>
+<audio id="background-music" src="yanhua.mp3" preload="auto" autoplay loop></audio>
+</body>
+ 
+</html>
+<script src="test.js"></script>
+<script>
+  const canvas = document.getElementById('canvas')
+  const canvasWidth = document.documentElement.clientWidth || document.body.clientWidth
+  const canvasHeight = document.documentElement.clientHeight || document.body.clientHeight
+  const ratio = Math.max(window.devicePixelRatio, 2)
+  canvas.width = canvasWidth * ratio
+  canvas.height = canvasHeight * ratio
+  canvas.style.width = canvasWidth + 'px'
+  canvas.style.height = canvasHeight + 'px'
+  const ctx = canvas.getContext('2d')
+  ctx.scale(ratio, ratio)
+ 
+  const getRandom = (min, max) => {
+    return Math.random() * (max - min) + min
+  }
+ 
+  const drawCircle = ({ opacity = 1, x, y, radius, color }) => {
+    ctx.save()
+    ctx.globalAlpha = opacity
+    ctx.beginPath()
+    ctx.arc(x, y, radius, 0, Math.PI * 2)
+    ctx.fillStyle = color
+    ctx.fill()
+    ctx.restore()
+  }
+  const deleteFromList = (list, target) => {
+    const index = list.findIndex(item => {
+      return item === target
+    })
+    list.splice(yanhua, 1)
+  }
+  
+  // 动画循环
+  // 烟花列表
+  const fireworkList = []
+  
+  const draw = () => {
+    // --- 核心修改开始 ---
+    
+    // 保存当前的混合模式
+    ctx.save();
+    
+    // 设置混合模式为 'destination-out'
+    // 这意味着接下来绘制的内容会把画布变成透明的
+    ctx.globalCompositeOperation = 'destination-out';
+    
+    // 绘制一个覆盖全屏的矩形，透明度为 0.1
+    // 这会让每一帧的烟花痕迹变淡 10% (露出下面的透明背景)，从而形成拖尾
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; 
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    
+    // 恢复混合模式为默认的 'source-over'，以便正常绘制新的烟花点
+    ctx.globalCompositeOperation = 'source-over';
+    
+    ctx.restore();
+    
+    // --- 核心修改结束 ---
+
+    ctx.save()
+ 
+    // 修改坐标系
+    ctx.translate(0, canvasHeight)
+    ctx.scale(1, -1)
+ 
+    const list = [...fireworkList]
+    list.forEach(firework => {
+      firework.update()
+      if (firework.isEnd()) {
+        deleteFromList(fireworkList, firework)
+      }
+    })
+ 
+    ctx.restore()
+ 
+    requestAnimationFrame(draw)
+  }
+  draw()
+ 
+  // 烟花颜色列表
+  const createFireworkColor = () => {
+    const colorList = [
+      '#ff0043',
+      '#14fc56',
+      '#1e7fff',
+      '#e60aff',
+      '#ffbf36',
+      '#ffffff'
+    ]
+    return colorList[Math.floor(Math.random() * colorList.length)]
+  }
+ 
+  // 自动发射烟花
+  setInterval(function () {
+    const firework = new Firework({
+      color: createFireworkColor()
+    })
+    fireworkList.push(firework)
+    firework.launch()
+  }, 1000);
+
+</script>

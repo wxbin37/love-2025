@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>流光粒子爱心 - 终极形态</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let width, height;
+
+    // ================= 核心配置调优 =================
+    const particleCount = 6000;     // 粒子数量：加到 6000，足够密集
+    const heartScale = 35;          // 爱心大小：从 22 改到 35，超级大
+    const sourceYOffset = 300;      // 底部源泉距离中心的距离
+    const sourceRadius = 80;        // 【关键】底部半径缩小，避免像漏斗
+    const speedBase = 2.5;          // 飞行速度基础值
+    // ===============================================
+
+    const particles = [];
+
+    // 【完美复刻图片颜色】高亮青/蓝/白
+    const colors = [
+        { r: 0, g: 255, b: 255 },   // 亮青色 (核心色)
+        { r: 30, g: 144, b: 255 },  // 荧光蓝
+        { r: 135, g: 206, b: 250 }, // 浅天蓝
+        { r: 255, g: 255, b: 255 }, // 纯白高光
+        { r: 0, g: 100, b: 255 }    // 深蓝 (增加深邃感)
+    ];
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // 爱心方程 (保持不变，这是最完美的形状)
+    function getHeartPosition(t) {
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+        // 增加厚度 z，让爱心饱满
+        const z = x * (Math.random() * 0.8 + 0.2);
+        return { x, y, z };
+    }
+
+    class Particle {
+        constructor() {
+            // 初始化时，让大部分粒子直接在爱心上，避免空屏
+            this.reset(Math.random() < 0.6);
+        }
+
+        reset(isInit = false) {
+            // 1. 目标点：爱心上的位置
+            const t = Math.random() * Math.PI * 2;
+            const target = getHeartPosition(t);
+
+            // 放大
+            this.targetX = target.x * heartScale;
+            this.targetY = target.y * heartScale;
+            this.targetZ = target.z * heartScale;
+
+            // 目标点的旋转半径 (圆柱坐标系 r)
+            this.targetRadius3D = Math.sqrt(this.targetX * this.targetX + this.targetZ * this.targetZ);
+
+            // 2. 初始位置
+            if (isInit) {
+                this.y = this.targetY;
+                this.radius = this.targetRadius3D;
+                this.angle = Math.atan2(this.targetZ, this.targetX);
+                this.timer = Math.random() * 200;
+                this.alpha = Math.random() * 0.8 + 0.2;
+            } else {
+                // 【源泉控制】
+                // y 固定在底部一个小范围
+                this.y = sourceYOffset + (Math.random() - 0.5) * 20;
+                // 半径固定在底部小圆盘
+                this.radius = sourceRadius + (Math.random() - 0.5) * 30;
+                this.angle = Math.random() * Math.PI * 2;
+
+                this.timer = 0;
+                this.alpha = 0;
+            }
+
+            // 粒子属性
+            this.speedY = Math.random() * speedBase + 1.0; // 速度
+            this.speedAngle = Math.random() * 0.03 + 0.01; // 旋转速度
+            this.colorRGB = colors[Math.floor(Math.random() * colors.length)];
+
+            // 【关键】粒子变大
+            this.sizeBase = Math.random() * 2.5 + 1.0;
+        }
+
+        update() {
+            // 旋转
+            this.angle += this.speedAngle;
+
+            // 飞行阶段
+            if (this.y > this.targetY) {
+                this.y -= this.speedY;
+
+                // 【轨迹优化】
+                // 不再是简单的线性插值，而是使用 ease-out 效果
+                // 让粒子在接近爱心时，半径能更精准地贴合
+                const totalDist = sourceYOffset - this.targetY;
+                const currentDist = this.y - this.targetY;
+                let progress = currentDist / totalDist; // 1 -> 0
+
+                // 这里的逻辑决定了是“漏斗”还是“龙卷风”
+                // 使用 Math.sqrt(progress) 会让线条稍微鼓一点，不那么直
+                this.radius = this.targetRadius3D + (sourceRadius - this.targetRadius3D) * progress;
+
+                // 快速显现
+                if (this.alpha < 1) this.alpha += 0.03;
+
+            } else {
+                // 到达爱心阶段
+                this.y = this.targetY;
+                this.radius = this.targetRadius3D;
+
+                // 在爱心上停留的时间加长，让形状更稳定
+                this.timer++;
+                if (this.timer > 150) {
+                    this.alpha -= 0.05;
+                    if (this.alpha <= 0) this.reset();
+                }
+            }
+
+            // 坐标转换
+            this.curX = Math.cos(this.angle) * this.radius;
+            this.curZ = Math.sin(this.angle) * this.radius;
+        }
+
+        draw(centerX, centerY) {
+            // 3D 投影
+            const fov = 400;
+            const scale = fov / (fov + this.curZ + 600); // 调整透视深度
+
+            const x2d = this.curX * scale + centerX;
+            const y2d = this.y * scale + centerY;
+            const size = this.sizeBase * scale;
+
+            if (this.alpha > 0) {
+                ctx.beginPath();
+                ctx.arc(x2d, y2d, size, 0, Math.PI * 2);
+
+                // 颜色填充
+                ctx.fillStyle = `rgba(${this.colorRGB.r}, ${this.colorRGB.g}, ${this.colorRGB.b}, ${this.alpha})`;
+
+                // 发光效果：只有近处的、大的粒子才发光，节省性能且更有层次
+                if (scale > 0.6) {
+                    ctx.shadowBlur = 10 * scale;
+                    ctx.shadowColor = `rgba(${this.colorRGB.r}, ${this.colorRGB.g}, ${this.colorRGB.b}, 0.8)`;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.fill();
+            }
+        }
+    }
+
+    // 初始化
+    for (let i = 0; i < particleCount; i++) {
+        particles.push(new Particle());
+    }
+
+    function animate() {
+        // 纯黑背景，彻底消除闪烁
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, width, height);
+
+        const cx = width / 2;
+        // 把爱心稍微往上提一点，因为现在它很大
+        const cy = height / 2 - 50;
+
+        // 深度排序
+        particles.sort((a, b) => b.curZ - a.curZ);
+
+        particles.forEach(p => {
+            p.update();
+            p.draw(cx, cy);
+        });
+
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+
+</script>
+</body>
+</html>
